@@ -13,7 +13,11 @@ import time
 from datetime import datetime, timedelta
 import json
 from typing import Dict, List, Any, Optional
-from fpdf import FPDF
+try:
+    from fpdf import FPDF
+    FPDF_AVAILABLE = True
+except ImportError:
+    FPDF_AVAILABLE = False
 import base64
 
 # Page configuration
@@ -389,6 +393,9 @@ def create_risk_gauge(risk_score: float) -> go.Figure:
 
 def create_briefing_pdf(briefing_text: str, document_id: str) -> bytes:
     """Create PDF from briefing text."""
+    if not FPDF_AVAILABLE:
+        return b"PDF generation not available in this environment"
+
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font('Arial', 'B', 16)
@@ -564,14 +571,17 @@ def tab_analyze_document(demo_mode: bool):
 
         with col3:
             # Download PDF
-            if st.button("📄 Download Briefing PDF"):
-                pdf_content = create_briefing_pdf(briefing, response.get("document_id", "doc_123"))
-                st.download_button(
-                    label="Download PDF",
-                    data=pdf_content,
-                    file_name=f"briefing_{response.get('document_id', 'doc_123')}.pdf",
-                    mime="application/pdf"
-                )
+            if FPDF_AVAILABLE:
+                if st.button("📄 Download Briefing PDF"):
+                    pdf_content = create_briefing_pdf(briefing, response.get("document_id", "doc_123"))
+                    st.download_button(
+                        label="Download PDF",
+                        data=pdf_content,
+                        file_name=f"briefing_{response.get('document_id', 'doc_123')}.pdf",
+                        mime="application/pdf"
+                    )
+            else:
+                st.info("📄 PDF download not available in demo environment")
 
 def tab_attorney_queue(demo_mode: bool):
     """Tab 2: Attorney Queue."""
