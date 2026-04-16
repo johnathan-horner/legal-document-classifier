@@ -261,7 +261,7 @@ def create_sidebar():
         st.title("⚖️ Legal Doc AI")
 
         # Demo Mode Toggle
-        demo_mode = st.toggle("🎭 Demo Mode", value=True, help="Use mock data for demonstration")
+        demo_mode = st.checkbox("🎭 Demo Mode", value=True, help="Use mock data for demonstration")
 
         st.markdown("---")
 
