@@ -735,8 +735,7 @@ def tab_batch_processing(demo_mode: bool):
                 # Risk distribution chart
                 risk_scores = [r["risk_score"] for r in results]
                 fig = px.histogram(x=risk_scores, bins=10, title="Risk Score Distribution")
-                fig.update_xaxis(title="Risk Score")
-                fig.update_yaxis(title="Count")
+                fig.update_layout(xaxis_title="Risk Score", yaxis_title="Count")
                 st.plotly_chart(fig, use_container_width=True)
 
     else:
@@ -784,8 +783,7 @@ def tab_dashboard(demo_mode: bool):
         y=list(class_data.values()),
         title="Document Classification Distribution"
     )
-    fig_class.update_xaxis(title="Document Type")
-    fig_class.update_yaxis(title="Count")
+    fig_class.update_layout(xaxis_title="Document Type", yaxis_title="Count")
     st.plotly_chart(fig_class, use_container_width=True)
 
     # Row 3: Risk Score Distribution
@@ -815,8 +813,7 @@ def tab_dashboard(demo_mode: bool):
             orientation='h',
             title="Most Common Compliance Gaps"
         )
-        fig_gaps.update_xaxis(title="Frequency (%)")
-        fig_gaps.update_yaxis(title="Regulation")
+        fig_gaps.update_layout(xaxis_title="Frequency (%)", yaxis_title="Regulation")
         st.plotly_chart(fig_gaps, use_container_width=True)
 
     # Row 4: Agent Performance
