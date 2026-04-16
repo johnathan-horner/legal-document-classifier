@@ -277,8 +277,7 @@ def create_sidebar():
         """)
 
         # Architecture Diagram
-        if os.path.exists("docs/Legal_Doc_Classification_AWS_Architecture.png"):
-            st.image("docs/Legal_Doc_Classification_AWS_Architecture.png", caption="AWS Architecture")
+        st.image("docs/Legal_Doc_Classification_AWS_Architecture.png", caption="AWS Architecture")
 
         st.markdown("---")
 
