@@ -1,5 +1,7 @@
 # Legal Document Classification and Compliance Risk Scoring System
 
+![CI](https://github.com/johnathan-horner/legal-document-classifier/actions/workflows/ci.yml/badge.svg)
+
 A production-grade cloud-native AI system for government/legal use cases that combines PyTorch ML models, LangGraph multi-agent workflows, and AWS services for automated legal document processing and compliance risk assessment.
 
 ## Architecture
