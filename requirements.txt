@@ -5,3 +5,4 @@ pandas
 numpy
 python-dateutil
 Pillow
+fastmcp

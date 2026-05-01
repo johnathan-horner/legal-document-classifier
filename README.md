@@ -252,6 +252,65 @@ cdk deploy SecurityStack
 ./scripts/integration-test.sh
 ```
 
+## 🔌 MCP Server Integration
+
+The Legal Document Classification System includes a Model Context Protocol (MCP) server that exposes document analysis functionality through a standardized interface for AI assistant integration.
+
+### Available Tools
+
+#### `classify_document(document_text: str)`
+Classify a legal document into one of six predefined classes (contract, memorandum, policy, regulation, agreement, amendment).
+- **Args**: `document_text` - Full text content of the document
+- **Returns**: Classification, confidence scores for all classes, processing time, and document ID
+
+#### `analyze_clauses(document_text: str)`
+Analyze document text to identify and flag problematic clauses with risk levels.
+- **Args**: `document_text` - Full text content of the document
+- **Returns**: Flagged clauses with risk assessments, total clause count, high-risk count, and recommendations
+
+#### `check_regulatory_compliance(document_text: str)`
+Check document compliance against FedRAMP, FISMA, and FAR regulations.
+- **Args**: `document_text` - Full text content of the document
+- **Returns**: Compliance gaps, overall compliance score, critical gaps, and remediation recommendations
+
+#### `generate_briefing(document_text: str)`
+Generate a plain-English attorney briefing summarizing the document.
+- **Args**: `document_text` - Full text content of the document
+- **Returns**: Executive summary, key provisions, risk assessment, and actionable recommendations
+
+#### `get_risk_score(document_text: str)`
+Calculate a composite risk score and routing recommendation for the document.
+- **Args**: `document_text` - Full text content of the document
+- **Returns**: Composite risk score, risk breakdown, routing recommendation, and priority level
+
+### Available Resources
+
+#### `model://classifier`
+Returns DistilBERT model information including version, document classes, accuracy metrics, and training data details.
+
+#### `data://regulatory_requirements`
+Returns the regulatory requirements database with FedRAMP, FISMA, FAR compliance frameworks and risk scoring matrix.
+
+### Available Prompts
+
+#### `full_analysis`
+Pre-built prompt for complete document analysis pipeline including classification, clause review, compliance checking, and risk assessment.
+
+#### `batch_review`
+Pre-built prompt for batch document processing summary with aggregate insights for legal review efficiency.
+
+### Running the MCP Server
+
+```bash
+# Install FastMCP
+pip install fastmcp
+
+# Run the MCP server
+python mcp_server.py
+```
+
+The server will start on the default MCP port and expose all tools, resources, and prompts for integration with MCP-compatible AI assistants.
+
 ## Model Performance
 
 ### Document Classification
