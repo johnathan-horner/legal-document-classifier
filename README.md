@@ -393,6 +393,10 @@ cd lambdas/api && uvicorn main:app --reload
 python agents/test_pipeline.py
 ```
 
+## Architecture Decisions
+
+See [docs/decisions/](docs/decisions/) for architecture decision records.
+
 ## Model Documentation
 
 See [MODEL_CARD.md](MODEL_CARD.md) for detailed model specifications, performance metrics, and compliance information.
