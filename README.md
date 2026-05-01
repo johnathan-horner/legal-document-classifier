@@ -393,6 +393,10 @@ cd lambdas/api && uvicorn main:app --reload
 python agents/test_pipeline.py
 ```
 
+## Model Documentation
+
+See [MODEL_CARD.md](MODEL_CARD.md) for detailed model specifications, performance metrics, and compliance information.
+
 ## Contributing
 
 1. Follow PEP 8 style guidelines
