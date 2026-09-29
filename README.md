@@ -200,24 +200,6 @@ High-risk clause types automatically flagged:
 - **Encryption**: KMS encryption for all sensitive data
 - **Access Logging**: All document access tracked
 
-## Cost Estimates
-
-### 1K Documents/Day
-- **SageMaker Endpoint**: ~$200/month (ml.m5.large)
-- **Bedrock Claude**: ~$150/month (agent inference)
-- **ECS Fargate**: ~$100/month (2 vCPU, 4GB RAM)
-- **DynamoDB**: ~$50/month (on-demand)
-- **S3 + Textract**: ~$75/month
-- **Total**: ~$575/month
-
-### 10K Documents/Day
-- **SageMaker Endpoint**: ~$400/month (ml.m5.xlarge + auto-scaling)
-- **Bedrock Claude**: ~$1,200/month (higher volume)
-- **ECS Fargate**: ~$300/month (auto-scaling cluster)
-- **DynamoDB**: ~$200/month (provisioned capacity)
-- **S3 + Textract**: ~$500/month
-- **Total**: ~$2,600/month
-
 ## Deployment Instructions
 
 ### Prerequisites
@@ -315,26 +297,7 @@ The server will start on the default MCP port and expose all tools, resources, a
 
 ## Model Performance
 
-### Document Classification
-- **Overall Accuracy**: 94.2%
-- **Per-Class F1 Scores**:
-  - complaint: 0.96
-  - motion: 0.94
-  - contract: 0.95
-  - regulatory_filing: 0.92
-  - executive_order: 0.93
-  - legislative_text: 0.91
-
-### Clause Detection
-- **Precision**: 91.5%
-- **Recall**: 88.7%
-- **F1 Score**: 90.1%
-
-### Agent Performance
-- **Average Processing Time**: 45 seconds per document
-- **Clause Analysis Latency**: 12 seconds average
-- **Regulatory CrossRef Latency**: 18 seconds average
-- **Briefing Generation**: 8 seconds average
+Evaluation metrics will be published here once measured on a held-out split.
 
 ## Design Decisions
 

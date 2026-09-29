@@ -21,6 +21,7 @@
 ## Evaluation Metrics
 - Accuracy, Precision, Recall, F1, AUC-ROC per class
 - Confusion matrix available via dashboard endpoint
+- Evaluation metrics will be published here once measured on a held-out split.
 
 ## Risk Scoring
 - Composite score from clause severity + regulatory gaps + document type
