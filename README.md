@@ -1,379 +1,178 @@
-# Legal Document Classification and Compliance Risk Scoring System
+# Legal Document Type Classifier
 
 ![CI](https://github.com/johnathan-horner/legal-document-classifier/actions/workflows/ci.yml/badge.svg)
 
-A production-grade cloud-native AI system for government/legal use cases that combines PyTorch ML models, LangGraph multi-agent workflows, and AWS services for automated legal document processing and compliance risk assessment.
+**Status: In progress.** The classifier, review queue, audit log and Streamlit app run locally today.
+There is no hosted demo of this version.
+
+Independent reference project by Shoot It Analytics LLC. Built with public or synthetic data.
+
+## What it does
+
+1. Reads a legal document (pasted text, a .txt file or a .pdf) and predicts its type out of 8:
+   contract, court opinion, final rule, proposed rule, agency notice, executive order, proclamation,
+   presidential memorandum.
+2. Gives the prediction a confidence score and the three most likely types, and lists the words in
+   the document that pushed it toward the predicted type.
+3. Routes confident predictions to **auto** and low-confidence ones to a **review queue**, where a
+   person confirms or corrects the type.
+4. Logs every classification and every review to an append-only audit log. The log stores a SHA-256
+   hash of the text, not the text itself.
+
+| Auto-routed | Sent to review |
+|---|---|
+| ![auto](docs/screenshots/01-auto-routed.png) | ![review](docs/screenshots/02-sent-to-review.png) |
+
+| Review queue | Test results |
+|---|---|
+| ![queue](docs/screenshots/03-review-queue.png) | ![results](docs/screenshots/05-test-results.png) |
+
+## Why I built this
+
+**The problem.** Legal and compliance teams receive a steady mix of documents: contracts, court
+decisions, agency rules and notices, presidential actions. Before anyone can analyze a document it
+has to be sorted to the right person, and sorting by hand is slow. An automatic sorter is only useful
+if it says when it is unsure, so uncertain documents still reach a person.
+
+**What I set out to prove.** Whether a small, cheap classifier trained on public documents can sort
+legal documents by type and, using its own confidence, separate the ones it gets right from the ones
+a person should check, measured on documents from agencies and courts it never saw in training.
+
+**Key design decisions**
+- **Data:** 2,000 public documents, 250 per type, from the Federal Register API (public domain),
+  the Caselaw Access Project (public domain) and the CUAD contract set (CC BY 4.0).
+- **No giveaways:** Federal Register text states its own type (section banners such as
+  "[Proposed Rules]", the "ACTION:" line, phrases like "final rule" or "executive order"). These are
+  removed before training and a test checks that none remain, so the model has to use the substance.
+- **Honest split:** train, validation and test are split by agency or court, so templated documents
+  from one agency cannot appear on both sides.
+- **Model:** TF-IDF word and bigram features with logistic regression. Trains in under a minute on a
+  laptop CPU and needs no paid service.
+- **Threshold:** the review threshold is picked on validation as the lowest confidence where at
+  least 98% of auto-routed documents were correct.
+
+**Results.** On 432 held-out documents: 90.7% accuracy and 0.905 macro F1. 84.5% of documents were
+auto-routed at 96.2% accuracy; the other 15.5% went to review, where the model was right only 61% of
+the time. Per-class results are below.
+
+**Limits.** Public documents only; never used with client documents. Not legal advice and not a
+certified or regulated product.
+
+**What I'd do next in a real deployment.** Train on the team's own document mix and labels, add the
+types they actually receive (letters, filings, discovery), measure on scanned PDFs with OCR, and
+feed reviewer corrections back into training.
 
 ## Architecture
 
-![AWS Architecture](docs/Legal_Doc_Classification_AWS_Architecture.png)
-
-## Architecture Overview
-
 ```mermaid
-graph TB
-    subgraph "Document Ingestion"
-        S3_INGEST[S3 Ingest Bucket]
-        TEXTRACT[Amazon Textract]
-        S3_INGEST --> TEXTRACT
-    end
-
-    subgraph "ML Classification"
-        SAGEMAKER[SageMaker Endpoint<br/>DistilBERT Model]
-        TEXTRACT --> SAGEMAKER
-    end
-
-    subgraph "Multi-Agent Pipeline (ECS Fargate)"
-        EXTRACT[Extract Text]
-        CLASSIFY[Classify Document]
-        CLAUSE[Clause Analysis Agent]
-        REGULATORY[Regulatory CrossRef Agent]
-        RISK[Risk Scoring]
-        BRIEFING[Generate Briefing]
-        ROUTE[Route to Attorney]
-
-        EXTRACT --> CLASSIFY
-        CLASSIFY --> CLAUSE
-        CLASSIFY --> REGULATORY
-        CLAUSE --> RISK
-        REGULATORY --> RISK
-        RISK --> BRIEFING
-        BRIEFING --> ROUTE
-    end
-
-    subgraph "Data Storage"
-        DYNAMO_DOCS[DynamoDB: Documents]
-        DYNAMO_QUEUE[DynamoDB: Attorney Queue]
-        DYNAMO_REG[DynamoDB: Regulatory Rules]
-        DYNAMO_FEEDBACK[DynamoDB: Feedback]
-    end
-
-    subgraph "Routing & Notifications"
-        SQS_AUTO[SQS: Auto File]
-        SQS_JUNIOR[SQS: Junior Attorney]
-        SQS_SENIOR[SQS: Senior Attorney]
-        SNS[SNS: High Priority Alerts]
-    end
-
-    subgraph "API & Authentication"
-        API_GW[API Gateway]
-        LAMBDA_API[Lambda: API Handlers]
-        COGNITO[Cognito User Pool]
-        API_GW --> LAMBDA_API
-        COGNITO --> API_GW
-    end
-
-    subgraph "AI Services"
-        BEDROCK[Amazon Bedrock<br/>Claude 3 Sonnet]
-        CLAUSE --> BEDROCK
-        REGULATORY --> BEDROCK
-        BRIEFING --> BEDROCK
-    end
-
-    subgraph "Monitoring & Security"
-        CLOUDWATCH[CloudWatch]
-        CLOUDTRAIL[CloudTrail]
-        KMS[AWS KMS]
-    end
-
-    SAGEMAKER --> CLASSIFY
-    ROUTE --> SQS_AUTO
-    ROUTE --> SQS_JUNIOR
-    ROUTE --> SQS_SENIOR
-    ROUTE --> SNS
-    ROUTE --> DYNAMO_DOCS
-    CLAUSE --> DYNAMO_REG
-    REGULATORY --> DYNAMO_REG
-    LAMBDA_API --> DYNAMO_DOCS
-    LAMBDA_API --> DYNAMO_QUEUE
-    LAMBDA_API --> DYNAMO_FEEDBACK
+flowchart LR
+    D[Document text or PDF] --> C[TF-IDF + logistic regression]
+    C --> P[Type, confidence, top 3, evidence terms]
+    P --> R{confidence >= 0.513?}
+    R -- yes --> A[Auto]
+    R -- no --> Q[Review queue]
+    Q --> H[Reviewer confirms or corrects]
+    A --> L[(Audit log, SQLite)]
+    Q --> L
+    H --> L
 ```
 
-## LangGraph State Machine
+| Piece | File |
+|---|---|
+| Data collection and cleaning | `legal/collect.py` -> `data/documents.csv.gz` |
+| Classifier, routing, evidence terms | `legal/classifier.py` |
+| Training and evaluation | `legal/train.py` -> `artifacts/metrics.json`, `artifacts/classifier.joblib` |
+| Audit log | `legal/audit.py` |
+| App | `app.py` |
 
-```mermaid
-graph TB
-    START([Start])
-    EXTRACT[Extract Text<br/>Amazon Textract]
-    CLASSIFY[Classify Document<br/>SageMaker + DistilBERT]
+The cleaned dataset (3 MB) and trained model are committed, so the app and tests run without
+network access.
 
-    subgraph "Parallel Analysis"
-        CLAUSE[Clause Analysis Agent<br/>Bedrock Claude]
-        REGULATORY[Regulatory CrossRef Agent<br/>Bedrock Claude]
-    end
+## How to run
 
-    RISK[Risk Scoring<br/>Weighted Composite]
-    BRIEFING[Generate Briefing<br/>Bedrock Claude]
-    ROUTE[Route to Attorney]
-
-    LOW_RISK[Auto File<br/>SQS Queue]
-    MED_RISK[Junior Attorney<br/>SQS Queue]
-    HIGH_RISK[Senior Attorney<br/>SQS Queue + SNS]
-    LOW_CONF[Low Confidence<br/>Direct to Senior]
-
-    END([End])
-
-    START --> EXTRACT
-    EXTRACT --> CLASSIFY
-    CLASSIFY -->|confidence < 0.5| LOW_CONF
-    CLASSIFY -->|confidence >= 0.5| CLAUSE
-    CLASSIFY -->|confidence >= 0.5| REGULATORY
-    CLAUSE --> RISK
-    REGULATORY --> RISK
-    RISK --> BRIEFING
-    BRIEFING --> ROUTE
-    ROUTE -->|risk < 0.3| LOW_RISK
-    ROUTE -->|0.3 <= risk <= 0.7| MED_RISK
-    ROUTE -->|risk > 0.7| HIGH_RISK
-    LOW_CONF --> HIGH_RISK
-    LOW_RISK --> END
-    MED_RISK --> END
-    HIGH_RISK --> END
-```
-
-## Document Classification Classes
-
-- **complaint**: Legal complaints and grievances
-- **motion**: Court motions and procedural requests
-- **contract**: Agreements, terms of service, partnerships
-- **regulatory_filing**: SEC filings, compliance reports
-- **executive_order**: Government executive orders
-- **legislative_text**: Bills, statutes, regulations
-
-## Key Clause Detection
-
-High-risk clause types automatically flagged:
-- Indemnification clauses
-- Liability limitation provisions
-- Termination conditions
-- Non-compete agreements
-- Data sharing provisions
-- Penalty and damages clauses
-
-## Risk Scoring Methodology
-
-**Composite Risk Score (0-1 scale):**
-- PyTorch classifier confidence (30% weight)
-- Clause risk ratings from agent analysis (40% weight)
-- Compliance gap severity (30% weight)
-
-**Routing Logic:**
-- Low risk (< 0.3): Auto-archive
-- Medium risk (0.3-0.7): Junior attorney review
-- High risk (> 0.7): Senior attorney review + alert
-
-## AWS Services Used
-
-### Core Infrastructure
-- **S3**: Document storage and model artifacts
-- **Amazon Textract**: PDF text extraction with OCR
-- **SageMaker**: ML model training and real-time inference
-- **Amazon Bedrock**: LLM inference (Claude 3 Sonnet)
-- **ECS Fargate**: Containerized multi-agent pipeline
-
-### Data & Queuing
-- **DynamoDB**: Document metadata, attorney queues, regulatory rules
-- **SQS**: Attorney work queues by priority level
-- **SNS**: High-priority document alerts
-
-### API & Security
-- **API Gateway**: REST API with JWT authentication
-- **Lambda**: API handlers and event processors
-- **Cognito**: User authentication and authorization
-- **KMS**: Encryption at rest for all data
-- **CloudTrail**: Audit logging for compliance
-
-### Monitoring
-- **CloudWatch**: Metrics, alarms, and dashboards
-- **X-Ray**: Distributed tracing for agent pipeline
-
-## Government Compliance Features
-
-### Security
-- **FedRAMP Ready**: All data encrypted at rest and in transit
-- **Role-Based Access Control**: Clerk, Junior Attorney, Senior Attorney, Department Head
-- **Audit Trail**: Complete CloudTrail logging of all actions
-- **Data Retention**: Configurable retention policies
-
-### Privacy
-- **Data Minimization**: Only necessary metadata stored
-- **Encryption**: KMS encryption for all sensitive data
-- **Access Logging**: All document access tracked
-
-## Deployment Instructions
-
-### Prerequisites
-- AWS CLI configured with appropriate permissions
-- Node.js 18+ for CDK
-- Python 3.11+
-- Docker for ECS deployment
-
-### Bootstrap CDK
-```bash
-cdk bootstrap aws://ACCOUNT-NUMBER/REGION
-```
-
-### Deploy Infrastructure
-```bash
-# Deploy all stacks
-./scripts/deploy.sh
-
-# Or deploy individually
-cdk deploy DocumentProcessingStack
-cdk deploy AgentStack
-cdk deploy ApiStack
-cdk deploy MonitoringStack
-cdk deploy SecurityStack
-```
-
-### Seed Regulatory Database
-```bash
-./scripts/seed-regulatory-db.sh
-```
-
-### Run Integration Tests
-```bash
-./scripts/integration-test.sh
-```
-
-## 🔌 MCP Server Integration
-
-The Legal Document Classification System includes a Model Context Protocol (MCP) server that exposes document analysis functionality through a standardized interface for AI assistant integration.
-
-### Available Tools
-
-#### `classify_document(document_text: str)`
-Classify a legal document into one of six predefined classes (contract, memorandum, policy, regulation, agreement, amendment).
-- **Args**: `document_text` - Full text content of the document
-- **Returns**: Classification, confidence scores for all classes, processing time, and document ID
-
-#### `analyze_clauses(document_text: str)`
-Analyze document text to identify and flag problematic clauses with risk levels.
-- **Args**: `document_text` - Full text content of the document
-- **Returns**: Flagged clauses with risk assessments, total clause count, high-risk count, and recommendations
-
-#### `check_regulatory_compliance(document_text: str)`
-Check document compliance against FedRAMP, FISMA, and FAR regulations.
-- **Args**: `document_text` - Full text content of the document
-- **Returns**: Compliance gaps, overall compliance score, critical gaps, and remediation recommendations
-
-#### `generate_briefing(document_text: str)`
-Generate a plain-English attorney briefing summarizing the document.
-- **Args**: `document_text` - Full text content of the document
-- **Returns**: Executive summary, key provisions, risk assessment, and actionable recommendations
-
-#### `get_risk_score(document_text: str)`
-Calculate a composite risk score and routing recommendation for the document.
-- **Args**: `document_text` - Full text content of the document
-- **Returns**: Composite risk score, risk breakdown, routing recommendation, and priority level
-
-### Available Resources
-
-#### `model://classifier`
-Returns DistilBERT model information including version, document classes, accuracy metrics, and training data details.
-
-#### `data://regulatory_requirements`
-Returns the regulatory requirements database with FedRAMP, FISMA, FAR compliance frameworks and risk scoring matrix.
-
-### Available Prompts
-
-#### `full_analysis`
-Pre-built prompt for complete document analysis pipeline including classification, clause review, compliance checking, and risk assessment.
-
-#### `batch_review`
-Pre-built prompt for batch document processing summary with aggregate insights for legal review efficiency.
-
-### Running the MCP Server
+Python 3.11.
 
 ```bash
-# Install FastMCP
-pip install fastmcp
-
-# Run the MCP server
-python mcp_server.py
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt
+streamlit run app.py
+pytest
 ```
 
-The server will start on the default MCP port and expose all tools, resources, and prompts for integration with MCP-compatible AI assistants.
-
-## Model Performance
-
-Evaluation metrics will be published here once measured on a held-out split.
-
-## Design Decisions
-
-### Why Amazon Textract vs Local PDF Parsing?
-- **OCR Capability**: Handles scanned documents and handwritten notes
-- **Structured Output**: Provides confidence scores and bounding boxes
-- **Scalability**: Fully managed service with auto-scaling
-- **Government Security**: FedRAMP certified for sensitive documents
-
-### Why ECS Fargate vs Step Functions?
-- **Long-Running Processes**: Agent analysis can exceed Lambda timeout
-- **Resource Control**: Dedicated CPU/memory for LLM inference
-- **Container Benefits**: Consistent environment with dependency management
-- **Cost Efficiency**: Pay only for running tasks
-
-### Why Amazon Bedrock vs Direct LLM APIs?
-- **Enterprise Security**: Built-in data privacy and encryption
-- **Compliance**: AWS shared responsibility model
-- **Reliability**: Managed service with SLA guarantees
-- **Integration**: Native AWS SDK support
-
-### Parallel Agent Architecture
-- **Performance**: Clause analysis and regulatory crossref run simultaneously
-- **Resource Efficiency**: Better CPU utilization during I/O operations
-- **Fault Tolerance**: Independent failure domains
-- **Scalability**: Each agent can scale independently
-
-## Tear Down
+Rebuild the dataset and retrain (downloads about 1,500 Federal Register documents, 6 Caselaw volumes
+and the 106 MB CUAD archive; took about 40 minutes here, mostly downloads):
 
 ```bash
-# Destroy all stacks (in reverse dependency order)
-cdk destroy SecurityStack MonitoringStack ApiStack AgentStack DocumentProcessingStack
+python -m legal.collect --per-class 250
+python -m legal.train
 ```
 
-## Development
+## Measured results
 
-### Running Tests
-```bash
-# Unit tests
-pytest tests/unit/ -v
+**How measured.** `python -m legal.train`. 2,000 documents split with `StratifiedGroupKFold`
+(5 folds, seed 0), grouped by agency (Federal Register rules and notices) or court (opinions): 1,161
+train, 407 validation, 432 test. The regularization strength was picked on validation (C = 10,
+91.7% validation accuracy), then the routing threshold on validation. The test split was used once.
 
-# Integration tests
-pytest tests/integration/ -v
+Test split, per class:
 
-# Coverage report
-pytest --cov=. --cov-report=html
-```
+| Type | Documents | Accuracy | Precision |
+|---|---|---|---|
+| Contract | 50 | 1.000 | 0.893 |
+| Court opinion | 48 | 1.000 | 1.000 |
+| Final rule | 54 | 0.870 | 0.870 |
+| Proposed rule | 80 | 0.963 | 0.810 |
+| Agency notice | 50 | 0.560 | 0.966 |
+| Executive order | 50 | 1.000 | 0.862 |
+| Proclamation | 50 | 0.980 | 1.000 |
+| Presidential memorandum | 50 | 0.860 | 1.000 |
+| **All** | **432** | **0.907** | macro F1 0.905 |
 
-### Local Development
-```bash
-# Install dependencies
-pip install -r requirements.txt
+Routing on the test split (threshold 0.513):
 
-# Run API locally
-cd lambdas/api && uvicorn main:app --reload
+| Lane | Documents | Share | Accuracy |
+|---|---|---|---|
+| Auto | 365 | 84.5% | 96.2% |
+| Review queue | 67 | 15.5% | 61.2% |
 
-# Test agent pipeline
-python agents/test_pipeline.py
-```
+The auto lane reached 96.2% on test against the 98% target set on validation.
 
-## Architecture Decisions
+Tests: 13 pytest tests (no type markers left in the data, licenses recorded, no agency or court in
+two splits, the committed model reproduces the reported test accuracy, routing, the audit log stores
+no text, and the Streamlit app). CI also runs ruff and scans the git history with gitleaks.
 
-See [docs/decisions/](docs/decisions/) for architecture decision records.
+## Limits
 
-## Model Documentation
+- Contracts and court opinions come from different sources than the Federal Register documents, so
+  part of their 100% accuracy comes from source style, not just content.
+- Agency notices are the weak class (56%). Once their own "Notice" statements are removed, many read
+  like rules, and a few (6 of 50) look like contracts.
+- The classifier reads the first 6,000 characters of each document.
+- Text only. Scanned PDFs need OCR first.
+- No authentication in the app.
 
-See [MODEL_CARD.md](MODEL_CARD.md) for detailed model specifications, performance metrics, and compliance information.
+## What's next
 
-## Contributing
+- Add common intake types (letters, pleadings, motions) from public court records.
+- Compare with a small fine-tuned transformer on the same split.
+- A hosted demo of this version.
 
-1. Follow PEP 8 style guidelines
-2. Add type hints to all functions
-3. Include docstrings for public methods
-4. Write unit tests for new features
-5. Update documentation for API changes
+## Data and licenses
+
+- Federal Register documents (federalregister.gov API): U.S. government works, public domain.
+- Court opinions from the Caselaw Access Project (static.case.law, Federal Reporter 3d volumes
+  500-600): public domain.
+- Contracts from CUAD v1 by The Atticus Project (Zenodo record 4595826): CC BY 4.0.
+- Each row in `data/documents.csv.gz` records its source, license and URL.
+
+## Repository notes
+
+`legacy/` holds the earlier prototype (a LangGraph pipeline that imported four modules missing from
+the repo, CDK stacks, a FastAPI service, an MCP server and a demo app with mock data). None of it is
+used. It is kept until a decision is made to remove it. An earlier claim that parallel agent
+execution cut processing time in half could not be measured, because that pipeline never ran, and
+has been removed.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+Code: MIT, see [LICENSE](LICENSE). Data: see above.
