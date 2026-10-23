@@ -1,0 +1,197 @@
+{
+  "model_version": "tfidf-logreg-v1",
+  "generated_at": "2026-10-23T19:46:42+00:00",
+  "data": {
+    "documents": 2000,
+    "per_class": {
+      "final_rule": 250,
+      "proposed_rule": 250,
+      "agency_notice": 250,
+      "executive_order": 250,
+      "proclamation": 250,
+      "presidential_memorandum": 250,
+      "court_opinion": 250,
+      "contract": 250
+    },
+    "sources": {
+      "CUAD v1": "CC BY 4.0 (The Atticus Project)",
+      "Caselaw Access Project (F.3d)": "Public domain",
+      "Federal Register": "Public domain (U.S. government work)"
+    },
+    "split": {
+      "train": 1161,
+      "validation": 407,
+      "test": 432
+    },
+    "split_method": "StratifiedGroupKFold (5 folds, seed 0): fold 0 test, fold 1 validation, rest train; grouped by agency or court"
+  },
+  "model": {
+    "C": 10.0,
+    "validation_accuracy": 0.9165
+  },
+  "routing": {
+    "threshold": 0.5132,
+    "rule": "lowest confidence with >= 98% accuracy on auto-routed validation documents",
+    "test": {
+      "auto": {
+        "documents": 365,
+        "share": 0.8449,
+        "accuracy": 0.9616
+      },
+      "review_queue": {
+        "documents": 67,
+        "share": 0.1551,
+        "accuracy": 0.6119
+      }
+    }
+  },
+  "test": {
+    "accuracy": 0.9074,
+    "macro_f1": 0.9054,
+    "per_class": {
+      "contract": {
+        "documents": 50,
+        "accuracy": 1.0,
+        "precision": 0.8929,
+        "f1": 0.9434
+      },
+      "court_opinion": {
+        "documents": 48,
+        "accuracy": 1.0,
+        "precision": 1.0,
+        "f1": 1.0
+      },
+      "final_rule": {
+        "documents": 54,
+        "accuracy": 0.8704,
+        "precision": 0.8704,
+        "f1": 0.8704
+      },
+      "proposed_rule": {
+        "documents": 80,
+        "accuracy": 0.9625,
+        "precision": 0.8105,
+        "f1": 0.88
+      },
+      "agency_notice": {
+        "documents": 50,
+        "accuracy": 0.56,
+        "precision": 0.9655,
+        "f1": 0.7089
+      },
+      "executive_order": {
+        "documents": 50,
+        "accuracy": 1.0,
+        "precision": 0.8621,
+        "f1": 0.9259
+      },
+      "proclamation": {
+        "documents": 50,
+        "accuracy": 0.98,
+        "precision": 1.0,
+        "f1": 0.9899
+      },
+      "presidential_memorandum": {
+        "documents": 50,
+        "accuracy": 0.86,
+        "precision": 1.0,
+        "f1": 0.9247
+      }
+    },
+    "confusion_matrix": {
+      "labels": [
+        "contract",
+        "court_opinion",
+        "final_rule",
+        "proposed_rule",
+        "agency_notice",
+        "executive_order",
+        "proclamation",
+        "presidential_memorandum"
+      ],
+      "rows_true_cols_pred": [
+        [
+          50,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          48,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          47,
+          7,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          2,
+          77,
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          6,
+          0,
+          5,
+          11,
+          28,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          50,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          49,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          7,
+          0,
+          43
+        ]
+      ]
+    }
+  },
+  "wall_clock_seconds": 43.1
+}
