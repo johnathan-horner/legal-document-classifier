@@ -165,13 +165,6 @@ no text, and the Streamlit app). CI also runs ruff and scans the git history wit
 - Contracts from CUAD v1 by The Atticus Project (Zenodo record 4595826): CC BY 4.0.
 - Each row in `data/documents.csv.gz` records its source, license and URL.
 
-## Repository notes
-
-`legacy/` holds the earlier prototype (a LangGraph pipeline that imported four modules missing from
-the repo, CDK stacks, a FastAPI service, an MCP server and a demo app with mock data). None of it is
-used. It is kept until a decision is made to remove it. An earlier claim that parallel agent
-execution cut processing time in half could not be measured, because that pipeline never ran, and
-has been removed.
 
 ## License
 
