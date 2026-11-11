@@ -27,7 +27,7 @@ Independent reference project by Shoot It Analytics LLC. Built with public or sy
 |---|---|
 | ![queue](docs/screenshots/03-review-queue.png) | ![results](docs/screenshots/05-test-results.png) |
 
-## Why I built this
+## Case study
 
 **The problem.** Legal and compliance teams receive a steady mix of documents: contracts, court
 decisions, agency rules and notices, presidential actions. Before anyone can analyze a document it
