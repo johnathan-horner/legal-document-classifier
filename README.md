@@ -2,8 +2,9 @@
 
 ![CI](https://github.com/johnathan-horner/legal-document-classifier/actions/workflows/ci.yml/badge.svg)
 
-**Status: In progress.** The classifier, review queue, audit log and Streamlit app run locally today.
-There is no hosted demo of this version.
+**Status: Live.** Demo: https://legal-document-classifier.streamlit.app (checked 2026-11-16; the free
+Streamlit host puts it to sleep when idle and it wakes on the first visit). The classifier, review
+queue, audit log and Streamlit app also run locally.
 
 Independent reference project by Shoot It Analytics LLC. Built with public or synthetic data.
 
@@ -155,7 +156,6 @@ no text, and the Streamlit app). CI also runs ruff and scans the git history wit
 
 - Add common intake types (letters, pleadings, motions) from public court records.
 - Compare with a small fine-tuned transformer on the same split.
-- A hosted demo of this version.
 
 ## Data and licenses
 
