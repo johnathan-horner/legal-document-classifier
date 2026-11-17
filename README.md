@@ -108,22 +108,7 @@ Built by Johnathan Horner, Shoot It Analytics LLC
 
 ## Architecture
 
-![Legal Document Type Classifier: What runs today (no AWS at runtime)](docs/architecture/architecture.png)
-
-A person pastes text, uploads a .txt or .pdf, or picks a held-out example. The classifier reads the first 6,000 characters and returns a type, a confidence, the top 3 types and the terms behind the call; documents at 0.513 confidence or above go to auto, the rest to the review queue, and every step goes to an append-only SQLite log that stores a SHA-256 of the text. Data collection and training run offline and the model file is committed, so nothing calls out at runtime and no AWS is involved.
-
-The diagrams are built with the Python `diagrams` library from [`docs/architecture/`](docs/architecture/). Each arrow is checked against the code and, for AWS calls, the AWS documentation; see [`docs/architecture/arrow-verification.md`](docs/architecture/arrow-verification.md). A 1200x1500 copy of each diagram (`*-linkedin.png`) is in the same folder.
-
-| Piece | File |
-|---|---|
-| Data collection and cleaning | `legal/collect.py` -> `data/documents.csv.gz` |
-| Classifier, routing, evidence terms | `legal/classifier.py` |
-| Training and evaluation | `legal/train.py` -> `artifacts/metrics.json`, `artifacts/classifier.joblib` |
-| Audit log | `legal/audit.py` |
-| App | `app.py` |
-
-The cleaned dataset (3 MB) and trained model are committed, so the app and tests run without
-network access.
+The architecture diagram and how it works are in the [Case study](#architecture) above.
 
 ## How to run
 
