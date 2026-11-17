@@ -2,14 +2,15 @@
 
 ![CI](https://github.com/johnathan-horner/legal-document-classifier/actions/workflows/ci.yml/badge.svg)
 
-**Status: In progress.** The classifier, review queue, audit log and Streamlit app run locally today.
-There is no hosted demo of this version.
+**Status: Live.** Demo: https://legal-document-classifier.streamlit.app (checked 2026-11-16; the free
+Streamlit host puts it to sleep when idle and it wakes on the first visit). The classifier, review
+queue, audit log and Streamlit app also run locally.
 
 Independent reference project by Shoot It Analytics LLC. Built with public or synthetic data.
 
 ## What it does
 
-1. Reads a legal document (pasted text, a .txt file or a .pdf) and predicts its type out of 8:
+1. Reads a legal document (pasted text, a .txt file or the first 10 pages of a .pdf) and predicts its type out of 8:
    contract, court opinion, final rule, proposed rule, agency notice, executive order, proclamation,
    presidential memorandum.
 2. Gives the prediction a confidence score and the three most likely types, and lists the words in
@@ -27,66 +28,87 @@ Independent reference project by Shoot It Analytics LLC. Built with public or sy
 |---|---|
 | ![queue](docs/screenshots/03-review-queue.png) | ![results](docs/screenshots/05-test-results.png) |
 
-## Why I built this
+## Case study
 
-**The problem.** Legal and compliance teams receive a steady mix of documents: contracts, court
-decisions, agency rules and notices, presidential actions. Before anyone can analyze a document it
-has to be sorted to the right person, and sorting by hand is slow. An automatic sorter is only useful
-if it says when it is unsure, so uncertain documents still reach a person.
+**Legal Document Type Classifier.** Sorts legal documents into 8 types (contracts, court opinions, rules, notices, presidential documents) with a confidence score, sends unsure ones to a person, and logs every decision without storing the text.
 
-**What I set out to prove.** Whether a small, cheap classifier trained on public documents can sort
-legal documents by type and, using its own confidence, separate the ones it gets right from the ones
-a person should check, measured on documents from agencies and courts it never saw in training.
+Status: **Live** · [Live app](https://legal-document-classifier.streamlit.app) · [GitHub](https://github.com/johnathan-horner/legal-document-classifier) · [Portfolio](https://portfolio.johnathancloudspace.com/#legal-document-classifier)
 
-**Key design decisions**
-- **Data:** 2,000 public documents, 250 per type, from the Federal Register API (public domain),
-  the Caselaw Access Project (public domain) and the CUAD contract set (CC BY 4.0).
-- **No giveaways:** Federal Register text states its own type (section banners such as
-  "[Proposed Rules]", the "ACTION:" line, phrases like "final rule" or "executive order"). These are
-  removed before training and a test checks that none remain, so the model has to use the substance.
-- **Honest split:** train, validation and test are split by agency or court, so templated documents
-  from one agency cannot appear on both sides.
-- **Model:** TF-IDF word and bigram features with logistic regression. Trains in under a minute on a
-  laptop CPU and needs no paid service.
-- **Threshold:** the review threshold is picked on validation as the lowest confidence where at
-  least 98% of auto-routed documents were correct.
+### Real-world problem
 
-**Results.** On 432 held-out documents: 90.7% accuracy and 0.905 macro F1. 84.5% of documents were
-auto-routed at 96.2% accuracy; the other 15.5% went to review, where the model was right only 61% of
-the time. Per-class results are below.
+The Federal Register published 23,690 documents in 2025, including 2,441 rules, 1,498 proposed rules and 19,280 notices ([Federal Register statistics](https://www.federalregister.gov/reader-aids/federal-register-statistics/category-document-statistics)). Legal and compliance teams sort documents like these by type before anyone reads them for substance, and a wrong label sends a document to the wrong queue.
 
-**Limits.** Public documents only; never used with client documents. Not legal advice and not a
-certified or regulated product.
+### Why I built it
 
-**What I'd do next in a real deployment.** Train on the team's own document mix and labels, add the
-types they actually receive (letters, filings, discovery), measure on scanned PDFs with OCR, and
-feed reviewer corrections back into training.
+I wanted to see how far a small, cheap classifier trained on public documents could go, and whether its own confidence could separate the documents it gets right from the ones a person should check, measured on agencies and courts it never saw in training.
+
+### Version 1
+
+The first version was designed as a full AWS pipeline: Textract for OCR, a DistilBERT classifier on SageMaker, three parallel LangGraph agents on ECS Fargate for clause, regulatory and briefing analysis, SQS routing to attorney queues and Cognito access control. The pipeline imported modules that were never in the repo and the app showed mock data, so it never ran end to end. I rebuilt it in October 2026 as a small classifier that actually runs, costs nothing per document, and has results measured on documents it never saw.
+
+### Key decisions
+
+- **TF-IDF and logistic regression instead of an LLM.** It trains in 43 seconds on a laptop CPU, costs nothing per document and shows the terms behind each prediction. It is weaker on documents that differ only in meaning: agency notices are right 56% of the time.
+- **Strip the giveaways before training.** Headers and phrases that state the type outright are replaced with [TYPE], and tests check none remain. Scores are lower than on uncleaned text, but they measure substance, not headers.
+- **Hold out whole agencies and courts.** For rules, notices and opinions the split is grouped by agency or court, so templated documents from one source can't land in both train and test. Contracts and the three presidential types come from one source each, so they are split per document.
+- **Pick the review threshold on validation and use test once.** The threshold is the lowest confidence that gave 98% accuracy on auto-routed validation documents. The cost is that a miss on test stays a miss.
+
+### Architecture
+
+![Legal Document Type Classifier: Live architecture](docs/architecture/architecture.png)
+
+A person pastes text, uploads a .txt or .pdf, or picks a held-out example. The classifier reads the first 6,000 characters and returns a type, a confidence, the top 3 types and the terms behind the call; documents at 0.513 confidence or above go to auto, the rest to the review queue, and every step goes to an append-only SQLite log that stores a SHA-256 of the text. Data collection and training run offline and the model file is committed, so nothing calls out at runtime and no AWS is involved.
+
+### Governance and safety
+
+- Confidence routing: below 0.513 a document goes to a review queue where a person confirms or corrects the type.
+- Append-only audit log of every classification and review, with a SHA-256 of the text and never the text itself (tested).
+- Leakage guard: tests check no type-announcing text survives cleaning.
+- Out-of-domain test: unrelated text (a recipe) must fall below the threshold.
+- Labelled in the app as a routing aid for document intake, not legal advice. CI scans the git history for secrets.
+
+### Results
+
+- 432 held-out documents: 90.7% accuracy, macro F1 0.905.
+- Routing on test: 84.5% auto-routed at 96.2% accuracy; the 15.5% sent to review were right 61.2% of the time, which is why a person checks them.
+- Per class: contracts, court opinions and executive orders 100%; agency notices 56%, the weakest class.
+- 13 automated tests in CI.
+
+### What I got wrong
+
+- **I wrote the docs for the target design before it was built.** Now I only document what runs and what's measured.
+- **The documents announce their own type.** Federal Register text carries phrases like "final rule" and printing-office banners, so a model can score well by reading headers. Removing them before training lowered the scores and made them honest.
+- **The auto lane missed its target.** The review threshold was set for 98% accuracy on auto-routed validation documents. On test the auto lane reached 96.2%. I report the miss instead of retuning on test data.
+- **The split depended on the library version.** A different scikit-learn version produced a different train and test split, so the version is pinned and a test checks the split sizes.
+
+### Constraints
+
+- 2,000 public documents only, with each document's license recorded: Federal Register and Caselaw Access Project text is public domain, CUAD contracts are CC BY 4.0.
+- No model calls and no network calls at runtime. Data collection and training run offline, and the model file is committed to the repo.
+- Runs on a laptop CPU and on the free Streamlit host; training takes 43 seconds.
+- Text only: the classifier reads the first 6,000 characters, and only the first 10 pages of a PDF. No OCR.
+- Every result has to be measured on agencies and courts held out of training.
+
+### Limits
+
+Built on public documents only (Federal Register, Caselaw Access Project, CUAD), 8 types, first 6,000 characters; not legal advice and not reviewed by any regulator.
+
+### What I'd do in a real deployment
+
+Train on the team's own intake types with reviewer corrections fed back as labels, compare against a small fine-tuned transformer, and run it behind sign-in with a durable audit store.
+
+### Sources
+
+- [Federal Register: Document Count by Category](https://www.federalregister.gov/reader-aids/federal-register-statistics/category-document-statistics)
+- [Live app](https://legal-document-classifier.streamlit.app)
+- [GitHub](https://github.com/johnathan-horner/legal-document-classifier)
+- [Portfolio](https://portfolio.johnathancloudspace.com/#legal-document-classifier)
+
+Built by Johnathan Horner, Shoot It Analytics LLC
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    D[Document text or PDF] --> C[TF-IDF + logistic regression]
-    C --> P[Type, confidence, top 3, evidence terms]
-    P --> R{confidence >= 0.513?}
-    R -- yes --> A[Auto]
-    R -- no --> Q[Review queue]
-    Q --> H[Reviewer confirms or corrects]
-    A --> L[(Audit log, SQLite)]
-    Q --> L
-    H --> L
-```
-
-| Piece | File |
-|---|---|
-| Data collection and cleaning | `legal/collect.py` -> `data/documents.csv.gz` |
-| Classifier, routing, evidence terms | `legal/classifier.py` |
-| Training and evaluation | `legal/train.py` -> `artifacts/metrics.json`, `artifacts/classifier.joblib` |
-| Audit log | `legal/audit.py` |
-| App | `app.py` |
-
-The cleaned dataset (3 MB) and trained model are committed, so the app and tests run without
-network access.
+The architecture diagram and how it works are in the [Case study](#architecture) above.
 
 ## How to run
 
@@ -155,7 +177,6 @@ no text, and the Streamlit app). CI also runs ruff and scans the git history wit
 
 - Add common intake types (letters, pleadings, motions) from public court records.
 - Compare with a small fine-tuned transformer on the same split.
-- A hosted demo of this version.
 
 ## Data and licenses
 
