@@ -1,40 +1,41 @@
-"""Legal Document Type Classifier: what runs today (traced from origin/main).
+"""Legal Document Classifier: training pipeline (offline) and the live app. No AWS services."""
+import sys
+from pathlib import Path
 
-Run from this directory:  python architecture.py
-"""
-from diagrams.aws.general import User
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from diagrams import Diagram
+from diagrams.onprem.client import User
 
-from archstyle import arch, box, e, layer, linkedin, outside
+from style import EDGE, GRAPH, NODE, area, flow, icon, primary, soft
 
-OUT = "architecture"
-with arch("Legal Document Type Classifier", "What runs today (no AWS at runtime)", OUT):
-    user = User("Visitor / reviewer")
+with Diagram("Legal Document Classifier  |  Live architecture",
+             filename=str(Path(__file__).with_name("architecture")), outformat="png", direction="TB",
+             show=False, graph_attr=GRAPH, node_attr=NODE, edge_attr=EDGE):
+    user = User("Legal ops user\n(browser)")
 
-    with outside("Streamlit Community Cloud"):
-        with layer("App", margin=40):
-            app = box("Streamlit app (app.py)\nClassify | Review queue |\nAudit log | Test results")
-        with layer("Governance"):
-            audit = box("Audit log (SQLite)\nappend-only rows\nSHA-256 of text, no text")
-            queue = box("Review queue\nlatest row still 'pending'\n(confidence < 0.513)")
-        with layer("Committed artifacts", margin=36):
-            data = box("documents.csv.gz\n2,000 public documents\n(held-out examples)")
-            model = box("artifacts/\nclassifier.joblib: TF-IDF +\nlogistic regression (scikit-learn)\nmetrics.json: test results")
+    with area("Training  (offline, laptop CPU)", "plan"):
+        sources = icon("file-search-green", "2,000 public documents\nFederal Register, Caselaw\nAccess Project, CUAD")
+        clean = icon("list-checks-ink", "Strip type giveaways\nsplit by agency or court")
+        train = icon("scikitlearn", "TF-IDF + logistic\nregression")
+        model = icon("layers-green", "Model file in repo\nthreshold 0.513")
 
-    offline = outside("Offline build (not at runtime)")
-    offline.dot.graph_attr["labeljust"] = "r"  # keep the outgoing arrow clear of the label
-    with offline:
-        sources = box("Federal Register API\nCaselaw Access Project\nCUAD v1 (Zenodo)")
-        collect = box("legal/collect.py\ndownload + strip type markers")
-        train = box("legal/train.py\ngrouped split, pick C + threshold")
+    with area("Streamlit Community Cloud", "host"):
+        app = icon("streamlit", "Streamlit app\nclassify, review queue,\naudit log, results")
+        clf = icon("scikitlearn", "Classifier\n8 document types,\ntop 3 + key words")
+        with area("Routing lanes"):
+            auto = icon("list-checks-ink", "Auto-routed\n84.5% of test docs")
+            queue = icon("user-check-ink", "Review queue\nperson confirms\nor corrects")
+        with area("Audit"):
+            audit = icon("sqlite", "Audit log (SQLite)\nappend-only, stores\nSHA-256 hash, not text")
 
-    user >> e("paste, upload .txt/.pdf or pick example;\nconfirm or correct queued types") >> app
-    app >> e("writes 'classified' and\n'review' rows") >> audit
-    audit >> e("latest row per doc\nwhere pending") >> queue
-    app >> e("reads test-split\nexamples") >> data
-    app >> e("predict (first 6,000 chars):\ntype, confidence, top 3, evidence;\nreads metrics") >> model
+    sources >> flow("collect") >> clean
+    clean >> flow("train / val / test") >> train
+    train >> flow("save") >> model
+    model >> soft("loaded at startup") >> clf
 
-    sources >> e("HTTPS downloads\n(build time only)") >> collect
-    collect >> e("writes dataset") >> train
-    train >> e("writes model + metrics\n(committed to repo)") >> model
-
-linkedin(OUT)
+    user >> flow("text, .txt or .pdf\n(first 10 pages)") >> app
+    app >> primary("document text") >> clf
+    clf >> flow("confidence at or above") >> auto
+    clf >> flow("below") >> queue
+    auto >> flow("classification") >> audit
+    queue >> flow("classification + review") >> audit
